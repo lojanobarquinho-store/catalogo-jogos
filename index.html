@@ -542,7 +542,7 @@
             const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
 
             if (match && match[1]) {
-                return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`;
+                return 'https://drive.google.com/thumbnail?id=' + match[1] + '&sz=w400';
             }
 
             return url;
@@ -564,57 +564,60 @@
 
             const jogadores = game.jogadores_min || '?';
             const jogadoresMax = game.jogadores_max || '?';
-            const rangeJogadores = `${jogadores}-${jogadoresMax}`;
+            const rangeJogadores = jogadores + '-' + jogadoresMax;
 
-            let imagemHTML = '';
+            // Card sem imagem no innerHTML — imagem adicionada via JS puro abaixo
+            card.innerHTML =
+                '<div class="card-image"></div>' +
+                '<div class="card-header">' +
+                    '<h3 class="card-title">' + escapeHtml(game.nome) + '</h3>' +
+                    '<span class="badge ' + badgeClass + '">' + badgeText + '</span>' +
+                '</div>' +
+                '<div class="card-content">' +
+                    '<div class="category-tag">' + escapeHtml(game.categoria) + '</div>' +
+                    '<div class="info-row">' +
+                        '<span class="info-label">Jogadores:</span>' +
+                        '<span class="info-value">' + rangeJogadores + '</span>' +
+                    '</div>' +
+                    '<div class="info-row">' +
+                        '<span class="info-label">Disponível:</span>' +
+                        '<span class="info-value">' + escapeHtml(game.quantidade_disponivel) + ' un.</span>' +
+                    '</div>' +
+                    '<div class="price">' + precoFormatado + '</div>' +
+                '</div>' +
+                '<div class="card-footer">' +
+                    '<button class="btn-whatsapp" aria-label="Entrar em contato sobre ' + escapeHtml(game.nome) + ' via WhatsApp">Tenho interesse</button>' +
+                '</div>';
+
+            // Adiciona evento do WhatsApp sem HTML inline
+            card.querySelector('.btn-whatsapp').addEventListener('click', function() {
+                abrirWhatsApp(game.nome);
+            });
+
+            // Adiciona imagem via JavaScript puro — sem onerror inline
+            const cardImageDiv = card.querySelector('.card-image');
             const imagemUrl = convertImageUrl(game.imagem);
 
             if (imagemUrl) {
-                imagemHTML = `
-                    <div class="card-image">
-                        <img src="${imagemUrl}" alt="${escapeHtml(game.nome)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\"card-image-placeholder\">${escapeHtml(game.nome)}</div>'">
-                    </div>
-                `;
+                const img = document.createElement('img');
+                img.src = imagemUrl;
+                img.alt = escapeHtml(game.nome);
+                img.loading = 'lazy';
+                img.onerror = function() {
+                    cardImageDiv.innerHTML = '<div class="card-image-placeholder">' + escapeHtml(game.nome) + '</div>';
+                };
+                cardImageDiv.appendChild(img);
             } else {
-                imagemHTML = `
-                    <div class="card-image">
-                        <div class="card-image-placeholder">${escapeHtml(game.nome)}</div>
-                    </div>
-                `;
+                cardImageDiv.innerHTML = '<div class="card-image-placeholder">' + escapeHtml(game.nome) + '</div>';
             }
-
-            card.innerHTML = `
-                ${imagemHTML}
-                <div class="card-header">
-                    <h3 class="card-title">${escapeHtml(game.nome)}</h3>
-                    <span class="badge ${badgeClass}">${badgeText}</span>
-                </div>
-                <div class="card-content">
-                    <div class="category-tag">${escapeHtml(game.categoria)}</div>
-                    <div class="info-row">
-                        <span class="info-label">Jogadores:</span>
-                        <span class="info-value">${rangeJogadores}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Disponível:</span>
-                        <span class="info-value">${game.quantidade_disponivel} un.</span>
-                    </div>
-                    <div class="price">${precoFormatado}</div>
-                </div>
-                <div class="card-footer">
-                    <button class="btn-whatsapp" onclick="abrirWhatsApp('${escapeHtml(game.nome)}')" aria-label="Entrar em contato sobre ${escapeHtml(game.nome)} via WhatsApp">
-                        Tenho interesse
-                    </button>
-                </div>
-            `;
 
             return card;
         }
 
         function abrirWhatsApp(nomeJogo) {
-            const mensagem = `Olá! Tenho interesse em comprar o jogo ${nomeJogo}. Podemos conversar?`;
+            const mensagem = 'Olá! Tenho interesse em comprar o jogo ' + nomeJogo + '. Podemos conversar?';
             const mensagemCodificada = encodeURIComponent(mensagem);
-            const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${mensagemCodificada}`;
+            const url = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + mensagemCodificada;
             window.open(url, '_blank');
         }
 
@@ -627,7 +630,7 @@
                 '"': '&quot;',
                 "'": '&#039;'
             };
-            return text.toString().replace(/[&<>"']/g, m => map[m]);
+            return text.toString().replace(/[&<>"']/g, function(m) { return map[m]; });
         }
 
         function showError(message) {
