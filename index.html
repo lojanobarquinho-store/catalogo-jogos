@@ -566,10 +566,25 @@
             const jogadoresMax = game.jogadores_max || '?';
             const rangeJogadores = `${jogadores}-${jogadoresMax}`;
 
+            let imagemHTML = '';
             const imagemUrl = convertImageUrl(game.imagem);
 
+            if (imagemUrl) {
+                imagemHTML = `
+                    <div class="card-image">
+                        <img src="${imagemUrl}" alt="${escapeHtml(game.nome)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\"card-image-placeholder\">${escapeHtml(game.nome)}</div>'">
+                    </div>
+                `;
+            } else {
+                imagemHTML = `
+                    <div class="card-image">
+                        <div class="card-image-placeholder">${escapeHtml(game.nome)}</div>
+                    </div>
+                `;
+            }
+
             card.innerHTML = `
-                <div class="card-image" id="card-image-${Math.random()}"></div>
+                ${imagemHTML}
                 <div class="card-header">
                     <h3 class="card-title">${escapeHtml(game.nome)}</h3>
                     <span class="badge ${badgeClass}">${badgeText}</span>
@@ -592,20 +607,6 @@
                     </button>
                 </div>
             `;
-
-            const cardImageDiv = card.querySelector('.card-image');
-            if (imagemUrl) {
-                const img = document.createElement('img');
-                img.src = imagemUrl;
-                img.alt = escapeHtml(game.nome);
-                img.loading = 'lazy';
-                img.onerror = function() {
-                    this.parentElement.innerHTML = '<div class="card-image-placeholder">' + escapeHtml(game.nome) + '</div>';
-                };
-                cardImageDiv.appendChild(img);
-            } else {
-                cardImageDiv.innerHTML = '<div class="card-image-placeholder">' + escapeHtml(game.nome) + '</div>';
-            }
 
             return card;
         }
