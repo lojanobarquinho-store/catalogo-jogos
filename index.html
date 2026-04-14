@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Catálogo B2B - Jogos de Tabuleiro</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -172,6 +173,36 @@
         .game-card:hover {
             transform: translateY(-2px);
             box-shadow: var(--shadow-lg);
+        }
+
+        .card-image {
+            width: 100%;
+            height: 200px;
+            background-color: var(--gray-200);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .card-image-placeholder {
+            width: 100%;
+            height: 100%;
+            background-color: var(--gray-300);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray-600);
+            font-size: 12px;
+            text-align: center;
+            padding: 16px;
+            font-weight: 500;
         }
 
         .card-header {
@@ -378,56 +409,37 @@
         const searchInputEl = document.getElementById('searchInput');
         const categoryFilterEl = document.getElementById('categoryFilter');
 
-        // Buscar dados do CSV
-        async function loadGames() {
+        // Buscar dados do CSV usando PapaParse
+        function loadGames() {
             loadingEl.style.display = 'block';
             errorEl.style.display = 'none';
             gamesContainerEl.innerHTML = '';
 
-            try {
-                const response = await fetch(CSV_URL);
+            Papa.parse(CSV_URL, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if (results.errors.length > 0) {
+                        showError('Erro ao processar a planilha');
+                        return;
+                    }
 
-                if (!response.ok) {
-                    throw new Error(`Erro ao carregar: ${response.status}`);
+                    allGames = results.data.filter(game => game.nome && game.nome.trim());
+
+                    if (allGames.length === 0) {
+                        showError('Nenhum jogo encontrado na planilha');
+                        return;
+                    }
+
+                    populateCategories();
+                    applyFilters();
+                    loadingEl.style.display = 'none';
+                },
+                error: function(error) {
+                    showError('Erro ao carregar a planilha. Verifique a URL do CSV.');
                 }
-
-                const csvText = await response.text();
-                allGames = parseCSV(csvText);
-
-                if (allGames.length === 0) {
-                    throw new Error('Nenhum jogo encontrado na planilha');
-                }
-
-                populateCategories();
-                applyFilters();
-                loadingEl.style.display = 'none';
-            } catch (error) {
-                showError(error.message);
-            }
-        }
-
-        // Parsear CSV simples
-        function parseCSV(csvText) {
-            const lines = csvText.trim().split('\n');
-            if (lines.length < 2) return [];
-
-            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-            const games = [];
-
-            for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',').map(v => v.trim());
-
-                const game = {};
-                headers.forEach((header, index) => {
-                    game[header] = values[index] || '';
-                });
-
-                if (game.nome) {
-                    games.push(game);
-                }
-            }
-
-            return games;
+            });
         }
 
         // Popular dropdown de categorias
@@ -493,7 +505,25 @@
             const jogadoresMax = game.jogadores_max || '?';
             const rangeJogadores = `${jogadores}-${jogadoresMax}`;
 
+            // Construir HTML da imagem
+            let imagemHTML = '';
+            if (game.imagem && game.imagem.trim()) {
+                const imagemUrl = `imagens/${game.imagem.trim()}`;
+                imagemHTML = `
+                    <div class="card-image">
+                        <img src="${imagemUrl}" alt="${escapeHtml(game.nome)}" onerror="this.closest('.card-image').innerHTML = '<div class=\"card-image-placeholder\">${escapeHtml(game.nome)}</div>'">
+                    </div>
+                `;
+            } else {
+                imagemHTML = `
+                    <div class="card-image">
+                        <div class="card-image-placeholder">${escapeHtml(game.nome)}</div>
+                    </div>
+                `;
+            }
+
             card.innerHTML = `
+                ${imagemHTML}
                 <div class="card-header">
                     <h3 class="card-title">${escapeHtml(game.nome)}</h3>
                     <span class="badge ${badgeClass}">${badgeText}</span>
