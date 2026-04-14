@@ -346,19 +346,26 @@
     <div class="container">
         <div class="filters-section">
             <div class="filters-wrapper">
-                <input
-                    type="text"
-                    id="searchInput"
-                    class="search-box"
-                    placeholder="Buscar por nome do jogo..."
-                >
-                <select id="categoryFilter" class="filter-select">
-                    <option value="">Todas as categorias</option>
-                </select>
+                <div>
+                    <label for="searchInput" style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: var(--gray-700);">Buscar por nome</label>
+                    <input
+                        type="text"
+                        id="searchInput"
+                        class="search-box"
+                        placeholder="Digite o nome do jogo..."
+                        aria-label="Buscar jogos por nome"
+                    >
+                </div>
+                <div>
+                    <label for="categoryFilter" style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: var(--gray-700);">Categoria</label>
+                    <select id="categoryFilter" class="filter-select" aria-label="Filtrar por categoria">
+                        <option value="">Todas as categorias</option>
+                    </select>
+                </div>
             </div>
         </div>
 
-        <div id="loading" class="loading" style="display: none;">
+        <div id="loading" class="loading" style="display: none;" role="status" aria-live="polite" aria-busy="true">
             <div class="spinner"></div>
             <p>Carregando catálogo...</p>
         </div>
@@ -409,12 +416,21 @@
         const searchInputEl = document.getElementById('searchInput');
         const categoryFilterEl = document.getElementById('categoryFilter');
 
-        // Buscar dados do CSV usando PapaParse
+        // Buscar dados do CSV usando PapaParse com fallback
         function loadGames() {
             loadingEl.style.display = 'block';
             errorEl.style.display = 'none';
             gamesContainerEl.innerHTML = '';
 
+            if (typeof Papa !== 'undefined') {
+                loadGamesWithPapaParse();
+            } else {
+                loadGamesWithFallback();
+            }
+        }
+
+        // Carregar com PapaParse
+        function loadGamesWithPapaParse() {
             Papa.parse(CSV_URL, {
                 download: true,
                 header: true,
@@ -437,9 +453,56 @@
                     loadingEl.style.display = 'none';
                 },
                 error: function(error) {
-                    showError('Erro ao carregar a planilha. Verifique a URL do CSV.');
+                    loadGamesWithFallback();
                 }
             });
+        }
+
+        // Fallback com fetch nativo
+        function loadGamesWithFallback() {
+            fetch(CSV_URL)
+                .then(response => {
+                    if (!response.ok) throw new Error('Erro na resposta do servidor');
+                    return response.text();
+                })
+                .then(csvText => {
+                    const games = parseCSVFallback(csvText);
+                    if (games.length === 0) {
+                        showError('Nenhum jogo encontrado na planilha');
+                        return;
+                    }
+                    allGames = games;
+                    populateCategories();
+                    applyFilters();
+                    loadingEl.style.display = 'none';
+                })
+                .catch(error => {
+                    showError('Não foi possível carregar a planilha. Tente novamente mais tarde.');
+                });
+        }
+
+        // Parser CSV simples para fallback
+        function parseCSVFallback(csvText) {
+            const lines = csvText.trim().split('\n');
+            if (lines.length < 2) return [];
+
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            const games = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim());
+                const game = {};
+
+                headers.forEach((header, index) => {
+                    game[header] = values[index] || '';
+                });
+
+                if (game.nome) {
+                    games.push(game);
+                }
+            }
+
+            return games;
         }
 
         // Popular dropdown de categorias
@@ -514,7 +577,7 @@
                 const match = imagemUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
                 if (match && match[1]) {
                     const fileId = match[1];
-                    imagemUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+                    imagemUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
                 }
 
                 imagemHTML = `
@@ -531,66 +594,3 @@
             }
 
             card.innerHTML = `
-                ${imagemHTML}
-                <div class="card-header">
-                    <h3 class="card-title">${escapeHtml(game.nome)}</h3>
-                    <span class="badge ${badgeClass}">${badgeText}</span>
-                </div>
-                <div class="card-content">
-                    <div class="category-tag">${escapeHtml(game.categoria)}</div>
-                    <div class="info-row">
-                        <span class="info-label">Jogadores:</span>
-                        <span class="info-value">${rangeJogadores}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Disponível:</span>
-                        <span class="info-value">${game.quantidade_disponivel} un.</span>
-                    </div>
-                    <div class="price">${precoFormatado}</div>
-                </div>
-                <div class="card-footer">
-                    <button class="btn-whatsapp" onclick="abrirWhatsApp('${escapeHtml(game.nome)}')">
-                        Tenho interesse
-                    </button>
-                </div>
-            `;
-
-            return card;
-        }
-
-        // Abrir WhatsApp
-        function abrirWhatsApp(nomeJogo) {
-            const mensagem = `Olá! Tenho interesse em comprar o jogo ${nomeJogo}. Podemos conversar?`;
-            const mensagemCodificada = encodeURIComponent(mensagem);
-            const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${mensagemCodificada}`;
-            window.open(url, '_blank');
-        }
-
-        // Escapar HTML
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, m => map[m]);
-        }
-
-        // Mostrar erro
-        function showError(message) {
-            loadingEl.style.display = 'none';
-            errorMessageEl.textContent = message;
-            errorEl.style.display = 'block';
-        }
-
-        // Event listeners
-        searchInputEl.addEventListener('input', applyFilters);
-        categoryFilterEl.addEventListener('change', applyFilters);
-
-        // Carregar jogos ao iniciar
-        loadGames();
-    </script>
-</body>
-</html>
