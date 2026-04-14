@@ -508,7 +508,7 @@
             // Construir HTML da imagem
             let imagemHTML = '';
             if (game.imagem && game.imagem.trim()) {
-                const imagemUrl = `imagens/${game.imagem.trim()}`;
+                const imagemUrl = `https://raw.githubusercontent.com/lojanobarquinho-store/catalogo-jogos/main/imagens/${game.imagem.trim()}`;
                 imagemHTML = `
                     <div class="card-image">
                         <img src="${imagemUrl}" alt="${escapeHtml(game.nome)}" onerror="this.closest('.card-image').innerHTML = '<div class=\"card-image-placeholder\">${escapeHtml(game.nome)}</div>'">
