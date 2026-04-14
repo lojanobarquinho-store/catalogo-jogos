@@ -508,7 +508,15 @@
             // Construir HTML da imagem
             let imagemHTML = '';
             if (game.imagem && game.imagem.trim()) {
-                const imagemUrl = game.imagem.trim();
+                let imagemUrl = game.imagem.trim();
+
+                // Converter URL do Google Drive se necessário
+                const match = imagemUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+                if (match && match[1]) {
+                    const fileId = match[1];
+                    imagemUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+                }
+
                 imagemHTML = `
                     <div class="card-image">
                         <img src="${imagemUrl}" alt="${escapeHtml(game.nome)}" onerror="this.closest('.card-image').innerHTML = '<div class=\"card-image-placeholder\">${escapeHtml(game.nome)}</div>'">
