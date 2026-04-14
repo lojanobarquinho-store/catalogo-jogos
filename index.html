@@ -183,6 +183,7 @@
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            position: relative;
         }
 
         .card-image img {
@@ -194,12 +195,12 @@
         .card-image-placeholder {
             width: 100%;
             height: 100%;
-            background-color: var(--gray-300);
+            background: linear-gradient(135deg, var(--gray-300) 0%, var(--gray-200) 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             color: var(--gray-600);
-            font-size: 12px;
+            font-size: 13px;
             text-align: center;
             padding: 16px;
             font-weight: 500;
@@ -371,7 +372,7 @@
         </div>
 
         <div id="error" class="error" style="display: none;">
-            <div class="error-icon">⚠️</div>
+            <div class="error-icon">⚠</div>
             <p id="errorMessage"></p>
         </div>
 
@@ -389,21 +390,8 @@
     </footer>
 
     <script>
-        // ========================================
-        // CONFIGURAÇÕES - ALTERE AQUI
-        // ========================================
-
-        // URL do CSV do Google Sheets
-        // Para gerar: Arquivo > Publicar na web > CSV > Copie a URL gerada
         const CSV_URL = 'https://docs.google.com/spreadsheets/d/1s8ivVNesxRI9b_Vqh9cFJviKXnWlwrhV8FZWPIiM77s/export?format=csv';
-
-        // Número do WhatsApp (apenas números, com código do país)
-        // Exemplo: 5511987654321 (Brasil, DDD 11, número)
         const WHATSAPP_NUMBER = '5541991767770';
-
-        // ========================================
-        // FIM DAS CONFIGURAÇÕES
-        // ========================================
 
         let allGames = [];
         let filteredGames = [];
@@ -416,83 +404,70 @@
         const searchInputEl = document.getElementById('searchInput');
         const categoryFilterEl = document.getElementById('categoryFilter');
 
-        // Buscar dados do CSV usando PapaParse com fallback
         function loadGames() {
             loadingEl.style.display = 'block';
             errorEl.style.display = 'none';
             gamesContainerEl.innerHTML = '';
 
             if (typeof Papa !== 'undefined') {
-                loadGamesWithPapaParse();
+                Papa.parse(CSV_URL, {
+                    download: true,
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        processGames(results.data);
+                    },
+                    error: function(error) {
+                        loadWithFallback();
+                    }
+                });
             } else {
-                loadGamesWithFallback();
+                loadWithFallback();
             }
         }
 
-        // Carregar com PapaParse
-        function loadGamesWithPapaParse() {
-            Papa.parse(CSV_URL, {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    if (results.errors.length > 0) {
-                        showError('Erro ao processar a planilha');
-                        return;
-                    }
-
-                    allGames = results.data.filter(game => game.nome && game.nome.trim());
-
-                    if (allGames.length === 0) {
-                        showError('Nenhum jogo encontrado na planilha');
-                        return;
-                    }
-
-                    populateCategories();
-                    applyFilters();
-                    loadingEl.style.display = 'none';
-                },
-                error: function(error) {
-                    loadGamesWithFallback();
-                }
-            });
-        }
-
-        // Fallback com fetch nativo
-        function loadGamesWithFallback() {
+        function loadWithFallback() {
             fetch(CSV_URL)
-                .then(response => {
-                    if (!response.ok) throw new Error('Erro na resposta do servidor');
-                    return response.text();
-                })
+                .then(response => response.text())
                 .then(csvText => {
-                    const games = parseCSVFallback(csvText);
-                    if (games.length === 0) {
-                        showError('Nenhum jogo encontrado na planilha');
-                        return;
-                    }
-                    allGames = games;
-                    populateCategories();
-                    applyFilters();
-                    loadingEl.style.display = 'none';
+                    const games = parseCSV(csvText);
+                    processGames(games);
                 })
                 .catch(error => {
-                    showError('Não foi possível carregar a planilha. Tente novamente mais tarde.');
+                    showError('Erro ao carregar catálogo. Tente novamente mais tarde.');
+                    loadingEl.style.display = 'none';
                 });
         }
 
-        // Parser CSV simples para fallback
-        function parseCSVFallback(csvText) {
+        function parseCSV(csvText) {
             const lines = csvText.trim().split('\n');
             if (lines.length < 2) return [];
 
-            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            const headers = lines[0].split(',').map(h => h.trim());
             const games = [];
 
             for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',').map(v => v.trim());
-                const game = {};
+                const line = lines[i].trim();
+                if (!line) continue;
 
+                const values = [];
+                let currentValue = '';
+                let insideQuotes = false;
+
+                for (let j = 0; j < line.length; j++) {
+                    const char = line[j];
+                    if (char === '"') {
+                        insideQuotes = !insideQuotes;
+                    } else if (char === ',' && !insideQuotes) {
+                        values.push(currentValue.trim().replace(/^"|"$/g, ''));
+                        currentValue = '';
+                    } else {
+                        currentValue += char;
+                    }
+                }
+                values.push(currentValue.trim().replace(/^"|"$/g, ''));
+
+                const game = {};
                 headers.forEach((header, index) => {
                     game[header] = values[index] || '';
                 });
@@ -505,7 +480,20 @@
             return games;
         }
 
-        // Popular dropdown de categorias
+        function processGames(games) {
+            allGames = games.filter(game => game.nome && game.nome.trim());
+
+            if (allGames.length === 0) {
+                showError('Nenhum jogo encontrado na planilha');
+                loadingEl.style.display = 'none';
+                return;
+            }
+
+            populateCategories();
+            applyFilters();
+            loadingEl.style.display = 'none';
+        }
+
         function populateCategories() {
             const categories = [...new Set(allGames.map(g => g.categoria).filter(c => c))];
             categories.sort();
@@ -518,7 +506,6 @@
             });
         }
 
-        // Aplicar filtros
         function applyFilters() {
             const searchTerm = searchInputEl.value.toLowerCase();
             const selectedCategory = categoryFilterEl.value;
@@ -532,7 +519,6 @@
             renderGames();
         }
 
-        // Renderizar cards
         function renderGames() {
             gamesContainerEl.innerHTML = '';
 
@@ -549,12 +535,24 @@
             });
         }
 
-        // Criar card de jogo
+        function convertImageUrl(urlOriginal) {
+            if (!urlOriginal || !urlOriginal.trim()) return null;
+
+            const url = urlOriginal.trim();
+            const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+
+            if (match && match[1]) {
+                return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`;
+            }
+
+            return url;
+        }
+
         function createGameCard(game) {
             const card = document.createElement('div');
             card.className = 'game-card';
 
-            const isAvailable = game.disponivel.toLowerCase() === 'sim' || game.disponivel === '1';
+            const isAvailable = game.disponivel && (game.disponivel.toLowerCase() === 'sim' || game.disponivel === '1');
             const badgeClass = isAvailable ? 'badge-available' : 'badge-unavailable';
             const badgeText = isAvailable ? 'Disponível' : 'Indisponível';
 
@@ -568,21 +566,13 @@
             const jogadoresMax = game.jogadores_max || '?';
             const rangeJogadores = `${jogadores}-${jogadoresMax}`;
 
-            // Construir HTML da imagem
             let imagemHTML = '';
-            if (game.imagem && game.imagem.trim()) {
-                let imagemUrl = game.imagem.trim();
+            const imagemUrl = convertImageUrl(game.imagem);
 
-                // Converter URL do Google Drive se necessário
-                const match = imagemUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-                if (match && match[1]) {
-                    const fileId = match[1];
-                    imagemUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
-                }
-
+            if (imagemUrl) {
                 imagemHTML = `
                     <div class="card-image">
-                        <img src="${imagemUrl}" alt="${escapeHtml(game.nome)}" onerror="this.closest('.card-image').innerHTML = '<div class=\"card-image-placeholder\">${escapeHtml(game.nome)}</div>'">
+                        <img src="${imagemUrl}" alt="${escapeHtml(game.nome)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\"card-image-placeholder\">${escapeHtml(game.nome)}</div>'">
                     </div>
                 `;
             } else {
@@ -612,7 +602,7 @@
                     <div class="price">${precoFormatado}</div>
                 </div>
                 <div class="card-footer">
-                    <button class="btn-whatsapp" onclick="abrirWhatsApp('${escapeHtml(game.nome)}')" aria-label="Entrar em contato sobre o jogo ${escapeHtml(game.nome)} via WhatsApp">
+                    <button class="btn-whatsapp" onclick="abrirWhatsApp('${escapeHtml(game.nome)}')" aria-label="Entrar em contato sobre ${escapeHtml(game.nome)} via WhatsApp">
                         Tenho interesse
                     </button>
                 </div>
@@ -621,7 +611,6 @@
             return card;
         }
 
-        // Abrir WhatsApp
         function abrirWhatsApp(nomeJogo) {
             const mensagem = `Olá! Tenho interesse em comprar o jogo ${nomeJogo}. Podemos conversar?`;
             const mensagemCodificada = encodeURIComponent(mensagem);
@@ -629,8 +618,8 @@
             window.open(url, '_blank');
         }
 
-        // Escapar HTML
         function escapeHtml(text) {
+            if (!text) return '';
             const map = {
                 '&': '&amp;',
                 '<': '&lt;',
@@ -638,21 +627,18 @@
                 '"': '&quot;',
                 "'": '&#039;'
             };
-            return text.replace(/[&<>"']/g, m => map[m]);
+            return text.toString().replace(/[&<>"']/g, m => map[m]);
         }
 
-        // Mostrar erro
         function showError(message) {
             loadingEl.style.display = 'none';
             errorMessageEl.textContent = message;
             errorEl.style.display = 'block';
         }
 
-        // Event listeners
         searchInputEl.addEventListener('input', applyFilters);
         categoryFilterEl.addEventListener('change', applyFilters);
 
-        // Carregar jogos ao iniciar
         loadGames();
     </script>
 </body>
