@@ -281,6 +281,34 @@
             margin-bottom: 12px;
         }
 
+        .category-chip {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background-color: var(--gray-200);
+            color: var(--gray-700);
+            border: none;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .category-chip:hover {
+            background-color: var(--gray-300);
+        }
+
+        .category-chip.active {
+            background-color: var(--primary-color);
+            color: var(--white);
+        }
+
+        .category-chip.active:hover {
+            background-color: var(--primary-light);
+        }
+
         .card-footer {
             padding: 16px;
             border-top: 1px solid var(--gray-200);
@@ -363,8 +391,20 @@
                         <option value="">Todas as categorias</option>
                     </select>
                 </div>
+                <div>
+                    <label for="sortFilter" style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: var(--gray-700);">Ordenar por</label>
+                    <select id="sortFilter" class="filter-select" aria-label="Ordenar resultados">
+                        <option value="relevancia">Relevância</option>
+                        <option value="menor-preco">Menor preço</option>
+                        <option value="maior-preco">Maior preço</option>
+                        <option value="a-z">A-Z</option>
+                        <option value="z-a">Z-A</option>
+                    </select>
+                </div>
             </div>
         </div>
+
+        <div id="categoryChips" style="display: flex; gap: 8px; overflow-x: auto; padding: 16px; background-color: var(--white); border-radius: 8px; margin: 24px 0; box-shadow: var(--shadow);"></div>
 
         <div id="loading" class="loading" style="display: none;" role="status" aria-live="polite" aria-busy="true">
             <div class="spinner"></div>
@@ -403,6 +443,8 @@
         const emptyStateEl = document.getElementById('emptyState');
         const searchInputEl = document.getElementById('searchInput');
         const categoryFilterEl = document.getElementById('categoryFilter');
+        const sortFilterEl = document.getElementById('sortFilter');
+        const categoryChipsEl = document.getElementById('categoryChips');
 
         function loadGames() {
             loadingEl.style.display = 'block';
@@ -504,6 +546,87 @@
                 option.textContent = category;
                 categoryFilterEl.appendChild(option);
             });
+
+            renderCategoryChips();
+        }
+
+        function renderCategoryChips() {
+            categoryChipsEl.innerHTML = '';
+
+            const categories = [...new Set(allGames.map(g => g.categoria).filter(c => c))];
+            categories.sort();
+
+            const allChip = document.createElement('button');
+            allChip.className = 'category-chip active';
+            allChip.textContent = 'Todos';
+            allChip.onclick = function() {
+                categoryFilterEl.value = '';
+                applyFilters();
+            };
+            categoryChipsEl.appendChild(allChip);
+
+            categories.forEach(category => {
+                const chip = document.createElement('button');
+                chip.className = 'category-chip';
+                chip.textContent = category;
+                chip.dataset.category = category;
+                chip.onclick = function() {
+                    categoryFilterEl.value = category;
+                    applyFilters();
+                };
+                categoryChipsEl.appendChild(chip);
+            });
+
+            updateCategoryChipsActive();
+        }
+
+        function updateCategoryChipsActive() {
+            const selectedCategory = categoryFilterEl.value;
+            const chips = categoryChipsEl.querySelectorAll('.category-chip');
+
+            chips.forEach(chip => {
+                if (selectedCategory === '' && chip.textContent === 'Todos') {
+                    chip.classList.add('active');
+                } else if (selectedCategory !== '' && chip.dataset.category === selectedCategory) {
+                    chip.classList.add('active');
+                } else {
+                    chip.classList.remove('active');
+                }
+            });
+        }
+
+        function sortGames(games) {
+            const sortType = sortFilterEl.value;
+
+            const gamesCopy = [...games];
+
+            switch (sortType) {
+                case 'menor-preco':
+                    gamesCopy.sort((a, b) => {
+                        const precoA = parseFloat(a.preco_venda) || 0;
+                        const precoB = parseFloat(b.preco_venda) || 0;
+                        return precoA - precoB;
+                    });
+                    break;
+                case 'maior-preco':
+                    gamesCopy.sort((a, b) => {
+                        const precoA = parseFloat(a.preco_venda) || 0;
+                        const precoB = parseFloat(b.preco_venda) || 0;
+                        return precoB - precoA;
+                    });
+                    break;
+                case 'a-z':
+                    gamesCopy.sort((a, b) => a.nome.toLowerCase().localeCompare(b.nome.toLowerCase()));
+                    break;
+                case 'z-a':
+                    gamesCopy.sort((a, b) => b.nome.toLowerCase().localeCompare(a.nome.toLowerCase()));
+                    break;
+                case 'relevancia':
+                default:
+                    break;
+            }
+
+            return gamesCopy;
         }
 
         function applyFilters() {
@@ -516,6 +639,9 @@
                 return matchesSearch && matchesCategory;
             });
 
+            filteredGames = sortGames(filteredGames);
+
+            updateCategoryChipsActive();
             renderGames();
         }
 
@@ -566,25 +692,10 @@
             const jogadoresMax = game.jogadores_max || '?';
             const rangeJogadores = `${jogadores}-${jogadoresMax}`;
 
-            let imagemHTML = '';
             const imagemUrl = convertImageUrl(game.imagem);
 
-            if (imagemUrl) {
-                imagemHTML = `
-                    <div class="card-image">
-                        <img src="${imagemUrl}" alt="${escapeHtml(game.nome)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\"card-image-placeholder\">${escapeHtml(game.nome)}</div>'">
-                    </div>
-                `;
-            } else {
-                imagemHTML = `
-                    <div class="card-image">
-                        <div class="card-image-placeholder">${escapeHtml(game.nome)}</div>
-                    </div>
-                `;
-            }
-
             card.innerHTML = `
-                ${imagemHTML}
+                <div class="card-image" id="card-image-${Math.random()}"></div>
                 <div class="card-header">
                     <h3 class="card-title">${escapeHtml(game.nome)}</h3>
                     <span class="badge ${badgeClass}">${badgeText}</span>
@@ -607,6 +718,20 @@
                     </button>
                 </div>
             `;
+
+            const cardImageDiv = card.querySelector('.card-image');
+            if (imagemUrl) {
+                const img = document.createElement('img');
+                img.src = imagemUrl;
+                img.alt = escapeHtml(game.nome);
+                img.loading = 'lazy';
+                img.onerror = function() {
+                    this.parentElement.innerHTML = '<div class="card-image-placeholder">' + escapeHtml(game.nome) + '</div>';
+                };
+                cardImageDiv.appendChild(img);
+            } else {
+                cardImageDiv.innerHTML = '<div class="card-image-placeholder">' + escapeHtml(game.nome) + '</div>';
+            }
 
             return card;
         }
@@ -638,6 +763,7 @@
 
         searchInputEl.addEventListener('input', applyFilters);
         categoryFilterEl.addEventListener('change', applyFilters);
+        sortFilterEl.addEventListener('change', applyFilters);
 
         loadGames();
     </script>
